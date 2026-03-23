@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
-import { Rocket, Plus, Download, ChevronRight, Loader2, Trash2, Link as LinkIcon } from 'lucide-react';
+import { Rocket, Plus, Download, ChevronRight, Loader2, Trash2, Link as LinkIcon, Home } from 'lucide-react';
 import { downloadCSV } from '@/lib/csv';
 
 export default function SheetCreator() {
@@ -70,6 +70,14 @@ export default function SheetCreator() {
 
   const handleDownload = () => {
     downloadCSV(results, 'whatnot-sheet.csv');
+  };
+
+  const handleGoHome = () => {
+    setStep(1);
+    setItems([]);
+    setResults([]);
+    setUrl('');
+    setQuantity('1');
   };
 
   const fadeInUp = {
@@ -225,7 +233,10 @@ export default function SheetCreator() {
                   <CardTitle className="text-2xl text-white">Generated Sheet</CardTitle>
                   <CardDescription className="text-slate-400">Review your scraped product data before downloading.</CardDescription>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 text-sm">
+                  <Button variant="ghost" onClick={handleGoHome} className="text-slate-400 hover:text-white hover:bg-slate-800">
+                    <Home className="mr-2 h-4 w-4" /> Home
+                  </Button>
                   <Button variant="outline" onClick={() => setStep(2)} className="border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800">
                     Back
                   </Button>
