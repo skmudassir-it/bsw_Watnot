@@ -58,17 +58,21 @@ export async function POST(req: Request) {
       const title = scrapedData.title || '';
       
       let description = '';
-      if (Array.isArray(scrapedData.features)) {
+      if (Array.isArray(scrapedData.features) && scrapedData.features.length > 0) {
         description = scrapedData.features.join(' | ');
+      } else if (typeof scrapedData.productDescription === 'string' && scrapedData.productDescription) {
+        description = scrapedData.productDescription;
+      } else if (typeof scrapedData.aboutThisItem === 'string' && scrapedData.aboutThisItem) {
+        description = scrapedData.aboutThisItem;
+      } else if (typeof scrapedData.description === 'string' && scrapedData.description) {
+        description = scrapedData.description;
       } else if (scrapedData.description) {
-        description = typeof scrapedData.description === 'string' ? scrapedData.description : JSON.stringify(scrapedData.description);
+        description = JSON.stringify(scrapedData.description);
       }
 
       // Images usually come in an array
       const images: string[] = scrapedData.images || [];
       const image1 = images[0] || scrapedData.thumbnail || scrapedData.image || '';
-      const image2 = images[1] || '';
-      const image3 = images[2] || '';
 
       // Price can be in various formats
       let priceStr = 'N/A';
@@ -84,8 +88,6 @@ export async function POST(req: Request) {
         title: title.substring(0, 100),
         description: description.substring(0, 200),
         image1,
-        image2,
-        image3,
         price: priceStr,
         quantity: inputItem.quantity
       };
