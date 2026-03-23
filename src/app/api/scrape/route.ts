@@ -13,7 +13,13 @@ export async function POST(req: Request) {
     });
 
     // We can process all URLs in a single Apify run to be efficient
-    const urls = items.map((item: any) => ({ url: item.url }));
+    const urls = items.map((item: any) => {
+      let targetUrl = item.url;
+      if (!/^https?:\/\//i.test(targetUrl)) {
+        targetUrl = 'https://' + targetUrl;
+      }
+      return { url: targetUrl };
+    });
 
     const input = {
       categoryUrl: "",
@@ -88,6 +94,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ results });
   } catch (err: any) {
     console.error('API Error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: String(err), stack: err.stack || '' }, { status: 500 });
   }
 }

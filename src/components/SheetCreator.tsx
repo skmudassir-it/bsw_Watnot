@@ -58,7 +58,7 @@ export default function SheetCreator() {
       if (data.results) {
         setResults(data.results);
       } else {
-        alert('Failed to process URLs');
+        alert('Failed to process URLs: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
       console.error(err);
