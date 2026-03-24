@@ -39,12 +39,15 @@ export async function POST(req: Request) {
 
         const pageTitle = $('title').text() || $('meta[property="og:title"]').attr('content') || '';
         
-        // Extract all image sources prioritizing data attributes used for lazy loading
+        const ppdNode = $('#ppd');
+        const contextNode = ppdNode.length > 0 ? ppdNode : $('body');
+        
+        // Extract all image sources prioritizing data attributes used for lazy loading within context
         const allImages = new Set<string>();
         const ogImage = $('meta[property="og:image"]').attr('content');
         if (ogImage) allImages.add(ogImage);
 
-        $('img').each((_, el) => {
+        contextNode.find('img').each((_, el) => {
            const src = $(el).attr('src');
            const dataSrc = $(el).attr('data-old-hires') || $(el).attr('data-src') || $(el).attr('data-a-dynamic-image');
            
@@ -63,8 +66,8 @@ export async function POST(req: Request) {
         });
 
         // Strip non-visual formatting
-        $('script, style, noscript, svg, path, nav, footer, iframe').remove();
-        let pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 12000);
+        contextNode.find('script, style, noscript, svg, path, nav, footer, iframe').remove();
+        let pageText = contextNode.text().replace(/\s+/g, ' ').substring(0, 12000);
 
         const systemPrompt = `You are a strict data extraction AI. Given the following URL, Page Title, Page Text, and List of Images, extract exactly the product title, product description, exactly 2 prominent high-quality product image URLs from the list provided (or empty string if none), and the exact price. Output ONLY valid JSON with keys: "title", "description", "image1", "image2", "price". Do not wrap in markdown tags. If a field cannot be found, use "N/A". CRITICALLY: If the "description" cannot be found in the text, you MUST generate a high-quality product description yourself using the product title instead of returning "N/A".`;
         
