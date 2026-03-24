@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ApifyClient } from 'apify-client';
+import * as cheerio from 'cheerio';
 
 export async function POST(req: Request) {
   try {
@@ -8,9 +8,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const client = new ApifyClient({
-      token: process.env.APIFY_API_TOKEN as string,
-    });
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (!groqApiKey) {
+      return NextResponse.json({ error: 'GROQ_API_KEY not configured in .env.local' }, { status: 500 });
+    }
 
     const results = await Promise.all(items.map(async (inputItem: any) => {
       let targetUrl = inputItem.url;
@@ -18,91 +19,99 @@ export async function POST(req: Request) {
         targetUrl = 'https://' + targetUrl;
       }
 
-      // Extract ASIN or search keyword from URL
-      const asinMatch = targetUrl.match(/(?:\/dp\/|\/gp\/product\/|\/asin\/|\/([A-Z0-9]{10})(?:[/?]|$))/i);
-      let searchQuery = targetUrl;
-      if (asinMatch && asinMatch[1]) {
-        searchQuery = asinMatch[1];
-      } else if (asinMatch && asinMatch[0]) {
-        searchQuery = asinMatch[0].replace(/[^A-Z0-9]/gi, '');
-      }
-
-      console.log(`Starting sovereigntaylor driver for query: ${searchQuery}`);
-
       try {
-        const run = await client.actor('sovereigntaylor/amazon-product-scraper').call({
-          searchQuery: searchQuery,
-          maxProducts: 1,
-          proxyConfiguration: { useApifyProxy: true },
-          marketplace: "amazon.com"
+        console.log(`Fetching HTML for ${targetUrl}...`);
+        const res = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: AbortSignal.timeout(8000)
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP fetch failed with status ${res.status}`);
+        }
+        
+        const html = await res.text();
+        const $ = cheerio.load(html);
+
+        const pageTitle = $('title').text() || $('meta[property="og:title"]').attr('content') || '';
+        
+        // Extract all image sources prioritizing data attributes used for lazy loading
+        const allImages = new Set<string>();
+        const ogImage = $('meta[property="og:image"]').attr('content');
+        if (ogImage) allImages.add(ogImage);
+
+        $('img').each((_, el) => {
+           const src = $(el).attr('src');
+           const dataSrc = $(el).attr('data-old-hires') || $(el).attr('data-src') || $(el).attr('data-a-dynamic-image');
+           
+           // Extract from Amazon dynamic images obj
+           if (dataSrc && dataSrc.startsWith('{')) {
+               try {
+                 const parsed = JSON.parse(dataSrc);
+                 Object.keys(parsed).forEach(k => allImages.add(k));
+               } catch(e) {}
+           } else {
+             const finalSrc = dataSrc || src;
+             if (finalSrc && finalSrc.startsWith('http') && !finalSrc.includes('sprite') && !finalSrc.includes('1x1.gif')) {
+                allImages.add(finalSrc);
+             }
+           }
         });
 
-        const dataset = await client.dataset(run.defaultDatasetId).listItems();
-        const scrapedData = dataset.items[0] as any;
+        // Strip non-visual formatting
+        $('script, style, noscript, svg, path, nav, footer, iframe').remove();
+        let pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 12000);
 
-        if (!scrapedData) {
-          return {
-            title: 'Not Found / Error',
-            description: 'Could not locate product using this actor.',
-            image1: '',
-            price: 'N/A',
-            quantity: inputItem.quantity
-          };
+        const systemPrompt = `You are a strict data extraction AI. Given the following URL, Page Title, Page Text, and List of Images, extract exactly the product title, product description, exactly 2 prominent high-quality product image URLs from the list provided (or empty string if none), and the exact price. Output ONLY valid JSON with keys: "title", "description", "image1", "image2", "price". Do not wrap in markdown tags. If a field cannot be found, use "N/A".`;
+        
+        const userPrompt = `URL: ${targetUrl}\nTitle: ${pageTitle}\n\nImages Found:\n${Array.from(allImages).slice(0, 25).join('\n')}\n\nPage Text:\n${pageText}`;
+
+        console.log(`Calling Groq API for ${targetUrl}...`);
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama3-8b-8192',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+          })
+        });
+
+        if (!groqRes.ok) {
+          const errText = await groqRes.text();
+          throw new Error(`Groq API Error: ${errText}`);
         }
 
-        const title = scrapedData.title || '';
-        const image1 = scrapedData.imageUrl || '';
-        const description = scrapedData.brand ? `Brand: ${scrapedData.brand}` : '';
-
-        let priceStr = 'N/A';
-        if (scrapedData.priceRaw) {
-          priceStr = String(scrapedData.priceRaw);
-        } else if (scrapedData.price) {
-          priceStr = String(scrapedData.price);
-        }
-
-        // Direct fetch fallback for missing fields if needed
-        let finalImage = image1;
-        let finalPrice = priceStr;
-
-        if (!finalImage || finalPrice === 'N/A') {
-          try {
-            const res = await fetch(targetUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html'
-              },
-              signal: AbortSignal.timeout(6000)
-            });
-            const html = await res.text();
-            
-            if (!finalImage) {
-              const imgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) || html.match(/"large":"([^"]+)"/);
-              if (imgMatch) finalImage = imgMatch[1];
-            }
-            if (finalPrice === 'N/A') {
-              const priceMatch = html.match(/<span\s+class="a-price-whole">([^<]+)<\/span>/i) || html.match(/\$(\d+\.\d{2})/);
-              if (priceMatch) finalPrice = '$' + priceMatch[1].replace('.', '');
-            }
-          } catch (e) {
-            console.log("Fallback fetch failed for", targetUrl);
-          }
-        }
+        const groqData = await groqRes.json();
+        const extracted = JSON.parse(groqData.choices[0].message.content);
 
         return {
-          title: title.substring(0, 100),
-          description: description.substring(0, 200),
-          image1: finalImage,
-          price: finalPrice,
+          title: extracted.title || pageTitle.substring(0, 100),
+          description: extracted.description || '',
+          image1: extracted.image1 || '',
+          image2: extracted.image2 || '',
+          price: extracted.price || 'N/A',
           quantity: inputItem.quantity
         };
 
-      } catch (err) {
-        console.error("Actor run failed for", targetUrl, err);
+      } catch (err: any) {
+        console.error("Scrape/Groq extraction failed for", targetUrl, err);
         return {
           title: 'Error',
-          description: 'Actor run failed.',
+          description: String(err.message || err),
           image1: '',
+          image2: '',
           price: 'N/A',
           quantity: inputItem.quantity
         };

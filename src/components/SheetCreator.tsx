@@ -262,7 +262,8 @@ export default function SheetCreator() {
                         <TableRow className="border-slate-800 hover:bg-transparent">
                           <TableHead className="text-slate-300">Title</TableHead>
                           <TableHead className="text-slate-300">Description</TableHead>
-                          <TableHead className="text-slate-300">Image</TableHead>
+                          <TableHead className="text-slate-300">Image 1</TableHead>
+                          <TableHead className="text-slate-300">Image 2</TableHead>
                           <TableHead className="text-slate-300">Price</TableHead>
                           <TableHead className="text-slate-300 text-right">Qty</TableHead>
                         </TableRow>
@@ -273,13 +274,14 @@ export default function SheetCreator() {
                             <TableCell className="font-medium text-slate-200 max-w-[200px] truncate" title={r.title}>{r.title}</TableCell>
                             <TableCell className="text-slate-400 max-w-[250px] truncate" title={r.description}>{r.description}</TableCell>
                             <TableCell className="max-w-[150px] truncate text-slate-500" title={r.image1}>{r.image1}</TableCell>
+                            <TableCell className="max-w-[150px] truncate text-slate-500" title={r.image2}>{r.image2}</TableCell>
                             <TableCell className="text-green-400 font-medium">{r.price}</TableCell>
                             <TableCell className="text-right text-slate-200">{r.quantity}</TableCell>
                           </TableRow>
                         ))}
                         {results.length === 0 && !isLoading && (
                           <TableRow>
-                            <TableCell colSpan={5} className="h-24 text-center text-slate-500">
+                            <TableCell colSpan={6} className="h-24 text-center text-slate-500">
                               No results found.
                             </TableCell>
                           </TableRow>
