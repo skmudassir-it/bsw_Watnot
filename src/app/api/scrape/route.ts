@@ -66,7 +66,7 @@ export async function POST(req: Request) {
         $('script, style, noscript, svg, path, nav, footer, iframe').remove();
         let pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 12000);
 
-        const systemPrompt = `You are a strict data extraction AI. Given the following URL, Page Title, Page Text, and List of Images, extract exactly the product title, product description, exactly 2 prominent high-quality product image URLs from the list provided (or empty string if none), and the exact price. Output ONLY valid JSON with keys: "title", "description", "image1", "image2", "price". Do not wrap in markdown tags. If a field cannot be found, use "N/A".`;
+        const systemPrompt = `You are a strict data extraction AI. Given the following URL, Page Title, Page Text, and List of Images, extract exactly the product title, product description, exactly 2 prominent high-quality product image URLs from the list provided (or empty string if none), and the exact price. Output ONLY valid JSON with keys: "title", "description", "image1", "image2", "price". Do not wrap in markdown tags. If a field cannot be found, use "N/A". CRITICALLY: If the "description" cannot be found in the text, you MUST generate a high-quality product description yourself using the product title instead of returning "N/A".`;
         
         const userPrompt = `URL: ${targetUrl}\nTitle: ${pageTitle}\n\nImages Found:\n${Array.from(allImages).slice(0, 25).join('\n')}\n\nPage Text:\n${pageText}`;
 
