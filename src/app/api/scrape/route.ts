@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     const datasetItems = (await client.dataset(run.defaultDatasetId).listItems()).items as any[];
 
     // Map the results back to our requested format
-    const results = items.map((inputItem: any) => {
+    const results = await Promise.all(items.map(async (inputItem: any) => {
       const scrapedData = datasetItems.find((d: any) => d.inputUrl === inputItem.url || d.url === inputItem.url);
 
       if (!scrapedData) {
@@ -47,8 +47,6 @@ export async function POST(req: Request) {
           title: 'Not Found / Error',
           description: 'Could not extract data for this URL with amazon-scraper.',
           image1: '',
-          image2: '',
-          image3: '',
           price: 'N/A',
           quantity: inputItem.quantity
         };
@@ -72,7 +70,7 @@ export async function POST(req: Request) {
 
       // Images usually come in an array
       const images: string[] = scrapedData.images || [];
-      const image1 = images[0] || scrapedData.thumbnail || scrapedData.image || '';
+      let image1 = images[0] || scrapedData.thumbnail || scrapedData.image || '';
 
       // Price can be in various formats
       let priceStr = 'N/A';
@@ -84,6 +82,31 @@ export async function POST(req: Request) {
         }
       }
 
+      // Hybrid Fallback: Amazon-scraper often lacks image/price. Direct fetch to snag og:image
+      if (!image1 || priceStr === 'N/A') {
+         try {
+           const res = await fetch(inputItem.url, {
+             headers: {
+               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+               'Accept': 'text/html'
+             },
+             signal: AbortSignal.timeout(6000)
+           });
+           const html = await res.text();
+           
+           if (!image1) {
+             const imgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) || html.match(/"large":"([^"]+)"/);
+             if (imgMatch) image1 = imgMatch[1];
+           }
+           if (priceStr === 'N/A') {
+             const priceMatch = html.match(/<span\s+class="a-price-whole">([^<]+)<\/span>/i) || html.match(/\$(\d+\.\d{2})/);
+             if (priceMatch) priceStr = '$' + priceMatch[1].replace('.', '');
+           }
+         } catch (e) {
+           console.log("Fallback fetch failed for", inputItem.url);
+         }
+      }
+
       return {
         title: title.substring(0, 100),
         description: description.substring(0, 200),
@@ -91,7 +114,7 @@ export async function POST(req: Request) {
         price: priceStr,
         quantity: inputItem.quantity
       };
-    });
+    }));
 
     return NextResponse.json({ results });
   } catch (err: any) {
