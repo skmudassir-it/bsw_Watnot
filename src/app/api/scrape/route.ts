@@ -8,9 +8,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const groqApiKey = process.env.GROQ_API_KEY;
-    if (!groqApiKey) {
-      return NextResponse.json({ error: 'GROQ_API_KEY not configured in .env.local' }, { status: 500 });
+    const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+    if (!deepseekApiKey) {
+      return NextResponse.json({ error: 'DEEPSEEK_API_KEY not configured in .env.local' }, { status: 500 });
     }
 
     const results = await Promise.all(items.map(async (inputItem: any) => {
@@ -70,15 +70,15 @@ export async function POST(req: Request) {
         
         const userPrompt = `URL: ${targetUrl}\nTitle: ${pageTitle}\n\nImages Found:\n${Array.from(allImages).slice(0, 25).join('\n')}\n\nPage Text:\n${pageText}`;
 
-        console.log(`Calling Groq API for ${targetUrl}...`);
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        console.log(`Calling DeepSeek API for ${targetUrl}...`);
+        const llmRes = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${groqApiKey}`,
+            'Authorization': `Bearer ${deepseekApiKey}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: 'deepseek-chat',
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
@@ -88,13 +88,13 @@ export async function POST(req: Request) {
           })
         });
 
-        if (!groqRes.ok) {
-          const errText = await groqRes.text();
-          throw new Error(`Groq API Error: ${errText}`);
+        if (!llmRes.ok) {
+          const errText = await llmRes.text();
+          throw new Error(`DeepSeek API Error: ${errText}`);
         }
 
-        const groqData = await groqRes.json();
-        const extracted = JSON.parse(groqData.choices[0].message.content);
+        const llmData = await llmRes.json();
+        const extracted = JSON.parse(llmData.choices[0].message.content);
 
         return {
           title: extracted.title || pageTitle.substring(0, 100),
