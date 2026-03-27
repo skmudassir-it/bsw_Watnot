@@ -1,6 +1,27 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
+async function resolveShortUrl(url: string): Promise<string> {
+  if (!url.includes('a.co/')) return url;
+  try {
+    const response = await fetch(url, { 
+      method: 'GET', 
+      redirect: 'manual',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (location) return location;
+    }
+    return url;
+  } catch (error) {
+    console.error('Error resolving short URL:', error);
+    return url;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { items } = await req.json();
@@ -22,7 +43,7 @@ export async function POST(req: Request) {
     const oxylabsAuthHeader = 'Basic ' + Buffer.from(`${oxylabsUsername}:${oxylabsPassword}`).toString('base64');
 
     const results = await Promise.all(items.map(async (inputItem: { url: string; quantity: number; weight?: string }) => {
-      let targetUrl = inputItem.url;
+      let targetUrl = await resolveShortUrl(inputItem.url);
       if (!/^https?:\/\//i.test(targetUrl)) {
         targetUrl = 'https://' + targetUrl;
       }
@@ -31,7 +52,7 @@ export async function POST(req: Request) {
         console.log(`Fetching data from Oxylabs for ${targetUrl}...`);
         
         // If it's an amazon URL, we can use source: 'amazon' (or 'universal') and pass the URL directly
-        const isAmazon = targetUrl.toLowerCase().includes('amazon.');
+        const isAmazon = targetUrl.toLowerCase().includes('amazon.') || targetUrl.toLowerCase().includes('a.co/');
         
         // Oxylabs expects 'url' parameter for direct URL scraping
         const oxylabsBody: { source: string; url: string; parse: boolean } = {
