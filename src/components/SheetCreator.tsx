@@ -10,11 +10,26 @@ import { Label } from '@/components/ui/label';
 import { Rocket, Plus, Download, ChevronRight, Loader2, Trash2, Link as LinkIcon, Home } from 'lucide-react';
 import { downloadCSV } from '@/lib/csv';
 
+const WEIGHT_OPTIONS = [
+  "0-1 oz",
+  "1-3 oz",
+  "4-7 oz",
+  "8-11 oz",
+  "12-15 oz",
+  "1 lb",
+  "1-2 lbs",
+  "2-3 lbs",
+  "3-4 lbs",
+  "4-6 lbs",
+  "10-14 lbs"
+];
+
 export default function SheetCreator() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [items, setItems] = useState<{ id: string; url: string; quantity: string }[]>([]);
+  const [items, setItems] = useState<{ id: string; url: string; quantity: string; weight: string }[]>([]);
   const [url, setUrl] = useState('');
   const [quantity, setQuantity] = useState('1');
+  const [weight, setWeight] = useState('1-3 oz');
   
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);
@@ -23,7 +38,7 @@ export default function SheetCreator() {
     if (e) e.preventDefault();
     if (!url.trim()) return;
     
-    setItems(prev => [...prev, { id: Math.random().toString(36).substring(7), url: url.trim(), quantity }]);
+    setItems(prev => [...prev, { id: Math.random().toString(36).substring(7), url: url.trim(), quantity, weight }]);
     setUrl('');
     setQuantity('1');
   };
@@ -35,12 +50,12 @@ export default function SheetCreator() {
   const handleGenerate = async () => {
     if (items.length === 0 && url.trim()) {
       // Auto add if they forgot to click add
-      setItems(prev => [...prev, { id: Math.random().toString(36).substring(7), url: url.trim(), quantity }]);
+      setItems(prev => [...prev, { id: Math.random().toString(36).substring(7), url: url.trim(), quantity, weight }]);
     }
     
     // We need to wait for state update if we just added it, but let's just use a local ref or combined array:
     const finalItems = items.length === 0 && url.trim() 
-      ? [{ id: 'temp', url: url.trim(), quantity }]
+      ? [{ id: 'temp', url: url.trim(), quantity, weight }]
       : items;
 
     if (finalItems.length === 0) return;
@@ -69,7 +84,25 @@ export default function SheetCreator() {
   };
 
   const handleDownload = () => {
-    downloadCSV(results, 'whatnot-sheet.csv');
+    const whatnotData = results.map(r => ({
+      'Category': 'Electronics',
+      'Sub Category': 'Everyday Electronics',
+      'Title': r.title,
+      'Description': r.description,
+      'Quantity': r.quantity,
+      'Type': 'Auction',
+      'Price': '1',
+      'Shipping Profile': r.weight || '1-3 oz',
+      'Offerable': 'TRUE',
+      'Hazmat': 'Not Hazmat',
+      'Condition': 'New',
+      'Cost Per Item': '',
+      'SKU': '',
+      'Image URL 1': r.image1,
+      'Image URL 2': r.image2,
+      'Image URL 3': ''
+    }));
+    downloadCSV(whatnotData, 'whatnot-sheet.csv');
   };
 
   const handleGoHome = () => {
@@ -78,6 +111,7 @@ export default function SheetCreator() {
     setResults([]);
     setUrl('');
     setQuantity('1');
+    setWeight('1-3 oz');
   };
 
   const fadeInUp = {
@@ -133,7 +167,7 @@ export default function SheetCreator() {
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 <form onSubmit={handleAddItem} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_80px_120px] gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="url" className="text-slate-300">Product URL</Label>
                       <div className="relative">
@@ -149,15 +183,28 @@ export default function SheetCreator() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="qty" className="text-slate-300">Quantity</Label>
+                      <Label htmlFor="qty" className="text-slate-300">Qty</Label>
                       <Input 
                         id="qty"
                         type="number"
                         min="1"
                         value={quantity}
                         onChange={(e) => setQuantity(e.target.value)}
-                        className="bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-600"
+                        className="bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-600 px-2 text-center"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="weight" className="text-slate-300">Weight</Label>
+                      <select
+                        id="weight"
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {WEIGHT_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <Button type="submit" variant="secondary" className="w-full bg-slate-800 hover:bg-slate-700 text-white">
@@ -180,7 +227,7 @@ export default function SheetCreator() {
                           >
                             <div className="flex flex-col overflow-hidden mr-4">
                               <span className="text-sm text-slate-200 truncate">{item.url}</span>
-                              <span className="text-xs text-blue-400 font-medium">Qty: {item.quantity}</span>
+                              <span className="text-xs text-blue-400 font-medium">Qty: {item.quantity} &bull; {item.weight}</span>
                             </div>
                             <Button 
                               variant="ghost" 

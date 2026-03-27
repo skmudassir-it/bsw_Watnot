@@ -135,7 +135,8 @@ export async function POST(req: Request) {
           image1: extracted.image1 || '',
           image2: extracted.image2 || '',
           price: extracted.price || 'N/A',
-          quantity: inputItem.quantity
+          quantity: inputItem.quantity,
+          weight: inputItem.weight || '0-1 oz'
         };
 
       } catch (err: any) {
@@ -146,7 +147,8 @@ export async function POST(req: Request) {
           image1: '',
           image2: '',
           price: 'N/A',
-          quantity: inputItem.quantity
+          quantity: inputItem.quantity,
+          weight: inputItem.weight || '0-1 oz'
         };
       }
     }));
