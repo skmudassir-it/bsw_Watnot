@@ -1,4 +1,4 @@
-export function downloadCSV(data: any[], filename: string) {
+export function downloadCSV(data: Record<string, string | number>[], filename: string) {
   if (!data || !data.length) return;
 
   const headers = Object.keys(data[0]);
@@ -19,7 +19,6 @@ export function downloadCSV(data: any[], filename: string) {
 
   const csvString = csvRows.join('\n');
   const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('url');
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

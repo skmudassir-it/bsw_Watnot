@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     const oxylabsAuthHeader = 'Basic ' + Buffer.from(`${oxylabsUsername}:${oxylabsPassword}`).toString('base64');
 
-    const results = await Promise.all(items.map(async (inputItem: any) => {
+    const results = await Promise.all(items.map(async (inputItem: { url: string; quantity: number; weight?: string }) => {
       let targetUrl = inputItem.url;
       if (!/^https?:\/\//i.test(targetUrl)) {
         targetUrl = 'https://' + targetUrl;
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         const isAmazon = targetUrl.toLowerCase().includes('amazon.');
         
         // Oxylabs expects 'url' parameter for direct URL scraping
-        let oxylabsBody: any = {
+        const oxylabsBody: { source: string; url: string; parse: boolean } = {
           source: isAmazon ? 'amazon' : 'universal',
           url: targetUrl,
           parse: true
@@ -58,9 +58,9 @@ export async function POST(req: Request) {
         
         const oxylabsData = await oxylabsRes.json();
         
-        let rawContent = oxylabsData?.results?.[0]?.content || oxylabsData?.results || oxylabsData;
+        const rawContent = oxylabsData?.results?.[0]?.content || oxylabsData?.results || oxylabsData;
         let scrapedContent = '';
-        let extractedImages = new Set<string>();
+        const extractedImages = new Set<string>();
         let pageTitle = '';
 
         if (typeof rawContent === 'string' && (rawContent.trim().toLowerCase().startsWith('<!doctype html') || rawContent.trim().toLowerCase().startsWith('<html'))) {
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
                    try {
                      const parsed = JSON.parse(dataSrc);
                      Object.keys(parsed).forEach(k => extractedImages.add(k));
-                   } catch(e) {}
+                    } catch(_e) {}
                } else {
                  const finalSrc = dataSrc || src;
                  if (finalSrc && finalSrc.startsWith('http') && !finalSrc.includes('sprite') && !finalSrc.includes('1x1.gif')) {
@@ -90,12 +90,12 @@ export async function POST(req: Request) {
             });
 
             contextNode.find('script, style, noscript, svg, path, nav, footer, iframe').remove();
-            let pageText = contextNode.text().replace(/\s+/g, ' ').substring(0, 12000);
+            const pageText = contextNode.text().replace(/\s+/g, ' ').substring(0, 12000);
             
             scrapedContent = `Page Title: ${pageTitle}\n\nImages Found:\n${Array.from(extractedImages).slice(0, 25).join('\n')}\n\nPage Text:\n${pageText}`;
         } else {
             // It's structured JSON
-            let stringified = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+            const stringified = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
             scrapedContent = stringified.substring(0, 15000);
         }
 
@@ -139,11 +139,12 @@ export async function POST(req: Request) {
           weight: inputItem.weight || '0-1 oz'
         };
 
-      } catch (err: any) {
-        console.error("Scraping extraction failed for", targetUrl, err);
+      } catch (err) {
+        const error = err as Error;
+        console.error("Scraping extraction failed for", targetUrl, error);
         return {
           title: 'Error',
-          description: String(err.message || err),
+          description: String(error.message || error),
           image1: '',
           image2: '',
           price: 'N/A',
@@ -154,8 +155,9 @@ export async function POST(req: Request) {
     }));
 
     return NextResponse.json({ results });
-  } catch (err: any) {
-    console.error('API Error:', err);
-    return NextResponse.json({ error: String(err), stack: err.stack || '' }, { status: 500 });
+  } catch (err) {
+    const error = err as Error & { stack?: string };
+    console.error('API Error:', error);
+    return NextResponse.json({ error: String(error), stack: error.stack || '' }, { status: 500 });
   }
 }

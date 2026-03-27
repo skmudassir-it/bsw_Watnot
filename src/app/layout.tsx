@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BSW WhatNot",
-  description: "BSW WhatNot",
+  title: "BSW Whatnot",
+  description: "BSW Whatnot",
 };
 
 export default function RootLayout({

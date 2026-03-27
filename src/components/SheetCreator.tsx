@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Label } from '@/components/ui/label';
 import { Rocket, Plus, Download, ChevronRight, Loader2, Trash2, Link as LinkIcon, Home } from 'lucide-react';
 import { downloadCSV } from '@/lib/csv';
+import type { ScrapedResult } from '@/types/scraped';
 
 const WEIGHT_OPTIONS = [
   "0-1 oz",
@@ -32,7 +33,7 @@ export default function SheetCreator() {
   const [weight, setWeight] = useState('1-3 oz');
   
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<ScrapedResult[]>([]);
 
   const handleAddItem = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
