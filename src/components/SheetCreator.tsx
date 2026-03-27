@@ -306,29 +306,49 @@ export default function SheetCreator() {
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader className="bg-slate-950/50">
-                        <TableRow className="border-slate-800 hover:bg-transparent">
-                          <TableHead className="text-slate-300">Title</TableHead>
-                          <TableHead className="text-slate-300">Description</TableHead>
-                          <TableHead className="text-slate-300">Image 1</TableHead>
-                          <TableHead className="text-slate-300">Image 2</TableHead>
-                          <TableHead className="text-slate-300">Price</TableHead>
-                          <TableHead className="text-slate-300 text-right">Qty</TableHead>
+                        <TableRow className="border-slate-800 hover:bg-transparent text-xs">
+                          <TableHead className="text-slate-300 min-w-[100px]">Category</TableHead>
+                          <TableHead className="text-slate-300 min-w-[150px]">Sub Category</TableHead>
+                          <TableHead className="text-slate-300 min-w-[200px]">Title</TableHead>
+                          <TableHead className="text-slate-300 min-w-[200px]">Description</TableHead>
+                          <TableHead className="text-slate-300 min-w-[80px]">Quantity</TableHead>
+                          <TableHead className="text-slate-300 min-w-[80px]">Type</TableHead>
+                          <TableHead className="text-slate-300 min-w-[80px]">Price</TableHead>
+                          <TableHead className="text-slate-300 min-w-[120px]">Shipping Profile</TableHead>
+                          <TableHead className="text-slate-300 min-w-[100px]">Offerable</TableHead>
+                          <TableHead className="text-slate-300 min-w-[100px]">Hazmat</TableHead>
+                          <TableHead className="text-slate-300 min-w-[100px]">Condition</TableHead>
+                          <TableHead className="text-slate-300 min-w-[120px]">Cost Per Item</TableHead>
+                          <TableHead className="text-slate-300 min-w-[80px]">SKU</TableHead>
+                          <TableHead className="text-slate-300 min-w-[120px]">Image URL 1</TableHead>
+                          <TableHead className="text-slate-300 min-w-[120px]">Image URL 2</TableHead>
+                          <TableHead className="text-slate-300 min-w-[120px]">Image URL 3</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {results.map((r, i) => (
-                          <TableRow key={i} className="border-slate-800 hover:bg-slate-800/40 transition-colors">
+                          <TableRow key={i} className="border-slate-800 hover:bg-slate-800/40 transition-colors text-xs">
+                            <TableCell className="text-slate-400">Electronics</TableCell>
+                            <TableCell className="text-slate-400">Everyday Electronics</TableCell>
                             <TableCell className="font-medium text-slate-200 max-w-[200px] truncate" title={r.title}>{r.title}</TableCell>
                             <TableCell className="text-slate-400 max-w-[250px] truncate" title={r.description}>{r.description}</TableCell>
+                            <TableCell className="text-blue-400 font-medium">{r.quantity}</TableCell>
+                            <TableCell className="text-slate-400">Auction</TableCell>
+                            <TableCell className="text-green-400 font-medium">1</TableCell>
+                            <TableCell className="text-slate-300">{r.weight || '1-3 oz'}</TableCell>
+                            <TableCell className="text-slate-400">TRUE</TableCell>
+                            <TableCell className="text-slate-400">Not Hazmat</TableCell>
+                            <TableCell className="text-slate-400">New</TableCell>
+                            <TableCell className="text-slate-400"></TableCell>
+                            <TableCell className="text-slate-400"></TableCell>
                             <TableCell className="max-w-[150px] truncate text-slate-500" title={r.image1}>{r.image1}</TableCell>
                             <TableCell className="max-w-[150px] truncate text-slate-500" title={r.image2}>{r.image2}</TableCell>
-                            <TableCell className="text-green-400 font-medium">{r.price}</TableCell>
-                            <TableCell className="text-right text-slate-200">{r.quantity}</TableCell>
+                            <TableCell className="text-slate-500"></TableCell>
                           </TableRow>
                         ))}
                         {results.length === 0 && !isLoading && (
                           <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                            <TableCell colSpan={16} className="h-24 text-center text-slate-500">
                               No results found.
                             </TableCell>
                           </TableRow>
