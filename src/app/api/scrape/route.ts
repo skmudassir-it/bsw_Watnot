@@ -13,6 +13,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'DEEPSEEK_API_KEY not configured in .env.local' }, { status: 500 });
     }
 
+    const oxylabsUsername = process.env.OXYLABS_USERNAME;
+    const oxylabsPassword = process.env.OXYLABS_PASSWORD;
+    if (!oxylabsUsername || !oxylabsPassword) {
+      return NextResponse.json({ error: 'OXYLABS credentials not configured in .env.local' }, { status: 500 });
+    }
+
+    const oxylabsAuthHeader = 'Basic ' + Buffer.from(`${oxylabsUsername}:${oxylabsPassword}`).toString('base64');
+
     const results = await Promise.all(items.map(async (inputItem: any) => {
       let targetUrl = inputItem.url;
       if (!/^https?:\/\//i.test(targetUrl)) {
@@ -20,58 +28,80 @@ export async function POST(req: Request) {
       }
 
       try {
-        console.log(`Fetching HTML for ${targetUrl}...`);
-        const res = await fetch(targetUrl, {
+        console.log(`Fetching data from Oxylabs for ${targetUrl}...`);
+        
+        // If it's an amazon URL, we can use source: 'amazon' (or 'universal') and pass the URL directly
+        const isAmazon = targetUrl.toLowerCase().includes('amazon.');
+        
+        // Oxylabs expects 'url' parameter for direct URL scraping
+        let oxylabsBody: any = {
+          source: isAmazon ? 'amazon' : 'universal',
+          url: targetUrl,
+          parse: true
+        };
+
+        const oxylabsRes = await fetch('https://realtime.oxylabs.io/v1/queries', {
+          method: 'POST',
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'Authorization': oxylabsAuthHeader,
+            'Content-Type': 'application/json'
           },
-          signal: AbortSignal.timeout(8000)
+          body: JSON.stringify(oxylabsBody),
+          // Abort timeout: Oxylabs real-time queries might take up to 25s for residential proxies
+          signal: AbortSignal.timeout(25000)
         });
         
-        if (!res.ok) {
-          throw new Error(`HTTP fetch failed with status ${res.status}`);
+        if (!oxylabsRes.ok) {
+          const rawErr = await oxylabsRes.text();
+          throw new Error(`Oxylabs fetch failed with status ${oxylabsRes.status}: ${rawErr}`);
         }
         
-        const html = await res.text();
-        const $ = cheerio.load(html);
-
-        const pageTitle = $('title').text() || $('meta[property="og:title"]').attr('content') || '';
+        const oxylabsData = await oxylabsRes.json();
         
-        const ppdNode = $('#ppd');
-        const contextNode = ppdNode.length > 0 ? ppdNode : $('body');
+        let rawContent = oxylabsData?.results?.[0]?.content || oxylabsData?.results || oxylabsData;
+        let scrapedContent = '';
+        let extractedImages = new Set<string>();
+        let pageTitle = '';
+
+        if (typeof rawContent === 'string' && (rawContent.trim().toLowerCase().startsWith('<!doctype html') || rawContent.trim().toLowerCase().startsWith('<html'))) {
+            // It's raw HTML, parse it carefully to keep DeepSeek's context clean and focused on product data
+            const $ = cheerio.load(rawContent);
+            pageTitle = $('title').text() || $('meta[property="og:title"]').attr('content') || '';
+            const ppdNode = $('#ppd');
+            const contextNode = ppdNode.length > 0 ? ppdNode : $('body');
+            
+            const ogImage = $('meta[property="og:image"]').attr('content');
+            if (ogImage) extractedImages.add(ogImage);
+
+            contextNode.find('img').each((_, el) => {
+               const src = $(el).attr('src');
+               const dataSrc = $(el).attr('data-old-hires') || $(el).attr('data-src') || $(el).attr('data-a-dynamic-image');
+               if (dataSrc && dataSrc.startsWith('{')) {
+                   try {
+                     const parsed = JSON.parse(dataSrc);
+                     Object.keys(parsed).forEach(k => extractedImages.add(k));
+                   } catch(e) {}
+               } else {
+                 const finalSrc = dataSrc || src;
+                 if (finalSrc && finalSrc.startsWith('http') && !finalSrc.includes('sprite') && !finalSrc.includes('1x1.gif')) {
+                    extractedImages.add(finalSrc);
+                 }
+               }
+            });
+
+            contextNode.find('script, style, noscript, svg, path, nav, footer, iframe').remove();
+            let pageText = contextNode.text().replace(/\s+/g, ' ').substring(0, 12000);
+            
+            scrapedContent = `Page Title: ${pageTitle}\n\nImages Found:\n${Array.from(extractedImages).slice(0, 25).join('\n')}\n\nPage Text:\n${pageText}`;
+        } else {
+            // It's structured JSON
+            let stringified = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+            scrapedContent = stringified.substring(0, 15000);
+        }
+
+        const systemPrompt = `You are a strict data extraction AI. Given the following URL and Scraped Data (from Oxylabs), extract exactly the product title, product description, exactly 2 prominent high-quality product image URLs from the list provided (or empty string if none), and the exact price. Output ONLY valid JSON with keys: "title", "description", "image1", "image2", "price". Do not wrap in markdown tags. If a field cannot be found, use "N/A". CRITICALLY: If the "description" cannot be found in the text, you MUST generate a high-quality product description yourself using the product title instead of returning "N/A".`;
         
-        // Extract all image sources prioritizing data attributes used for lazy loading within context
-        const allImages = new Set<string>();
-        const ogImage = $('meta[property="og:image"]').attr('content');
-        if (ogImage) allImages.add(ogImage);
-
-        contextNode.find('img').each((_, el) => {
-           const src = $(el).attr('src');
-           const dataSrc = $(el).attr('data-old-hires') || $(el).attr('data-src') || $(el).attr('data-a-dynamic-image');
-           
-           // Extract from Amazon dynamic images obj
-           if (dataSrc && dataSrc.startsWith('{')) {
-               try {
-                 const parsed = JSON.parse(dataSrc);
-                 Object.keys(parsed).forEach(k => allImages.add(k));
-               } catch(e) {}
-           } else {
-             const finalSrc = dataSrc || src;
-             if (finalSrc && finalSrc.startsWith('http') && !finalSrc.includes('sprite') && !finalSrc.includes('1x1.gif')) {
-                allImages.add(finalSrc);
-             }
-           }
-        });
-
-        // Strip non-visual formatting
-        contextNode.find('script, style, noscript, svg, path, nav, footer, iframe').remove();
-        let pageText = contextNode.text().replace(/\s+/g, ' ').substring(0, 12000);
-
-        const systemPrompt = `You are a strict data extraction AI. Given the following URL, Page Title, Page Text, and List of Images, extract exactly the product title, product description, exactly 2 prominent high-quality product image URLs from the list provided (or empty string if none), and the exact price. Output ONLY valid JSON with keys: "title", "description", "image1", "image2", "price". Do not wrap in markdown tags. If a field cannot be found, use "N/A". CRITICALLY: If the "description" cannot be found in the text, you MUST generate a high-quality product description yourself using the product title instead of returning "N/A".`;
-        
-        const userPrompt = `URL: ${targetUrl}\nTitle: ${pageTitle}\n\nImages Found:\n${Array.from(allImages).slice(0, 25).join('\n')}\n\nPage Text:\n${pageText}`;
+        const userPrompt = `URL: ${targetUrl}\n\nScraped Data:\n${scrapedContent}`;
 
         console.log(`Calling DeepSeek API for ${targetUrl}...`);
         const llmRes = await fetch('https://api.deepseek.com/chat/completions', {
@@ -100,7 +130,7 @@ export async function POST(req: Request) {
         const extracted = JSON.parse(llmData.choices[0].message.content);
 
         return {
-          title: extracted.title || pageTitle.substring(0, 100),
+          title: extracted.title || 'Unknown Title',
           description: extracted.description || '',
           image1: extracted.image1 || '',
           image2: extracted.image2 || '',
@@ -109,7 +139,7 @@ export async function POST(req: Request) {
         };
 
       } catch (err: any) {
-        console.error("Scrape/Groq extraction failed for", targetUrl, err);
+        console.error("Scraping extraction failed for", targetUrl, err);
         return {
           title: 'Error',
           description: String(err.message || err),
